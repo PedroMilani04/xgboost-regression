@@ -64,7 +64,7 @@ corr_matrix = df.drop(columns=["DATA"]).corr()  # remover coluna de datas e faz 
 
 
 # correlação alta
-threshold = 0.85
+threshold = 0.9
 
 colunas_para_remover = set()
 
@@ -78,6 +78,7 @@ for i in range(len(corr_matrix.columns)):
 print(colunas_para_remover)
 
 df = df.drop(columns=colunas_para_remover)
+df.to_csv("./projecao_preenchido_corrigido.csv", index=False)  # Salva após remover as colunas correlacionadas
 
 #corr_matrix = df.drop(columns=["DATA"]).corr()  # Remover coluna de datas
 #plt.figure(figsize=(12, 8))
@@ -88,7 +89,7 @@ df = df.drop(columns=colunas_para_remover)
 #------------------------------------------------------------####-------------------------------------------------------------------------#
 # previsão e estudo dos dados com XGBoost
 
-file_path = "./projecao_preenchido.csv"
+file_path = "./projecao_preenchido_corrigido.csv"  # Usa o novo arquivo ao invés do original
 df = pd.read_csv(file_path)
 
 # convertendo a coluna de datas para datetime
@@ -99,7 +100,7 @@ y = df["Y"]
 
 X_train, X_test, y_train, y_test, data_train, data_test = train_test_split(X, y, df["DATA"], test_size=0.2, random_state=42)
 
-model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, learning_rate=0.3, random_state=42)
+model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=150, learning_rate=0.3, random_state=42)
 model.fit(X_train, y_train)
 
 # fazendo previsões

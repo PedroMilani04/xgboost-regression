@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Carregar o arquivo CSV
-df = pd.read_csv("projecao.csv")  # Ajuste o nome do arquivo se necessário
+df = pd.read_csv("projecao_preenchido2.csv")  # Ajuste o nome do arquivo se necessário
 
 # Contar valores ausentes
 missing_values = df.isna().sum()
