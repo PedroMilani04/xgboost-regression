@@ -1,129 +1,132 @@
 import pandas as pd
 import numpy as np
 import xgboost as xgb
+import optuna
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error
 
-#------------------------------------------------------------####-------------------------------------------------------------------------#
-# preencher dados faltantes e criar prorjecao_preenchido.csv
+#------------------------------------------------------------#
+# 📌 Carregar o dataset
+df = pd.read_csv("./projecao.csv")
 
-# Y
-file_path = "./projecao.csv"
-df = pd.read_csv(file_path)
-
-# preencher o começo com backward fill (bfill) e o final com forward fill (ffill)
-df['Y'] = df['Y'].fillna(method='bfill').fillna(method='ffill')
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-#Xn
-# optei por fazer o tratamento com a média específica de cada um e não uma iteração genérica usando a média da propria range, para ver como se sairía
-df['X06'] = df['X06'].fillna(0.05) # média da range (usei a média da range em si pois os valores são muito pequenos, de 0 - 0.1)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X12'] = df['X12'].fillna(6.3) # seguindo o histograma, média da range com maior incidência (27% dos valores: 5.5 - 7.1)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X16'] = df['X16'].fillna(97.4) # seguindo o histograma, média da range com maior incidência (25% dos valores: 94.8 - 100.0)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X17'] = df['X17'].fillna(12.3) # seguindo o histograma, média da range com maior incidência (17% dos valores: 11.5 - 13.1)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X18'] = df['X18'].fillna(105.5) # seguindo o histograma, média da range com maior incidência (23% dos valores: 101.0 - 110.0)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X19'] = df['X19'].fillna(229) # seguindo o histograma, média da range com maior incidência (22% dos valores: 216.0 - 242.0)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X20'] = df['X20'].fillna(85) # seguindo o histograma, média da range com maior incidência (14% dos valores: 82.4 - 87.6)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df['X21'] = df['X21'].fillna(83.1) # seguindo o histograma, média da range com maior incidência (22% dos valores: 80.2  - 86.0)
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-#aqui, a range dos dados era muito grande e tinhamos um gap enorme de dados faltantes no inicio de cada coluna.
-#para dar maior naturalidade aos dados, preenchi os dados faltantes de X22 e X23 com valores aleatórios de suas respectivas ranges. 
-#O formato geral dos histogramas foi mantido, o que não aconteceu com o backward fill que testei antes.
-df.loc[df["X22"].isna(), "X22"] = np.random.uniform(2600, 16900, df["X22"].isna().sum())
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-df.loc[df["X23"].isna(), "X23"] = np.random.uniform(1500, 23800, df["X23"].isna().sum())
-df.to_csv("./projecao_preenchido.csv", index=False)
-
-#------------------------------------------------------------####-------------------------------------------------------------------------#
-#tratar a correlação das colunas
-
-corr_matrix = df.drop(columns=["DATA"]).corr()  # remover coluna de datas e faz a correlação
-
-# Plotar um heatmap para visualização
-#plt.figure(figsize=(12, 8))
-#sns.heatmap(corr_matrix, annot=False, cmap="coolwarm", center=0, linewidths=0.5)
-#plt.title("Matriz de Correlação")
-#plt.show()
-
-
-# correlação alta
-threshold = 0.9
-
-colunas_para_remover = set()
-
-# iteração na matriz de correlação
-#(ela é simetrica, então x1 não precisa comparar com x0, só com os da frente, pois ja foi comparado por x0 em si)
-for i in range(len(corr_matrix.columns)):
-    for j in range(i + 1, len(corr_matrix.columns)):  # evitar duplicação 
-        if abs(corr_matrix.iloc[i, j]) > threshold:  # se a correlação for muito alta,
-            colunas_para_remover.add(corr_matrix.columns[j])  # marca para remoção
-
-print(colunas_para_remover)
-
-df = df.drop(columns=colunas_para_remover)
-df.to_csv("./projecao_preenchido_corrigido.csv", index=False)  # Salva após remover as colunas correlacionadas
-
-#corr_matrix = df.drop(columns=["DATA"]).corr()  # Remover coluna de datas
-#plt.figure(figsize=(12, 8))
-#sns.heatmap(corr_matrix, annot=False, cmap="coolwarm", center=0, linewidths=0.5)
-#plt.title("Matriz de Correlação")
-#plt.show()
-
-#------------------------------------------------------------####-------------------------------------------------------------------------#
-# previsão e estudo dos dados com XGBoost
-
-file_path = "./projecao_preenchido_corrigido.csv"  # Usa o novo arquivo ao invés do original
-df = pd.read_csv(file_path)
-
-# convertendo a coluna de datas para datetime
+# 📌 Criar colunas "Mês" e "Ano"
 df["DATA"] = pd.to_datetime(df["DATA"])
+df["Mes"] = df["DATA"].dt.month
+df["Ano"] = df["DATA"].dt.year
 
-X = df.drop(columns=["Y", "DATA"])  # Remover 'Y' (alvo) e 'DATA' (não é uma feature numérica)
+# 📌 Lista das colunas Xn com valores faltantes a serem preenchidos
+colunas_com_nan = ["X06", "X12", "X16", "X17", "X18", "X19", "X20", "X21", "X22", "X23"]
+
+# 📌 Preencher os Xn usando XGBoost
+for coluna in colunas_com_nan:
+    print(f"Treinando modelo para preencher {coluna}...")
+
+    df_temp = df.drop(columns=['DATA', 'Y'])  # Remover DATA e Y para prever apenas Xn
+    colunas_completas = df_temp.columns[df_temp.notna().all()].tolist()
+
+    if colunas_completas:
+        X = df_temp[colunas_completas]
+        y = df[coluna]
+
+        X_train = X[y.notna()]
+        y_train = y[y.notna()]
+        X_pred = X[y.isna()]
+
+        model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=100, learning_rate=0.3, random_state=42)
+        model.fit(X_train, y_train)
+
+        df.loc[y.isna(), coluna] = model.predict(X_pred)
+
+# 📌 Salvar dataset com os Xn preenchidos
+df.to_csv("./projecao_preenchido_corrigido.csv", index=False)
+print("Preenchimento dos Xn finalizado e salvo!")
+
+#------------------------------------------------------------#
+# 📊 Previsão de Y usando os Xn preenchidos + "Mês" e "Ano"
+
+df = pd.read_csv("./projecao_preenchido_corrigido.csv")
+
+# 🔹 Recriar as colunas "Mês" e "Ano" após a leitura do CSV
+df["DATA"] = pd.to_datetime(df["DATA"])
+df["Mes"] = df["DATA"].dt.month
+df["Ano"] = df["DATA"].dt.year
+
+# 🔹 Selecionar features e alvo
+X = df.drop(columns=["Y", "DATA"])
 y = df["Y"]
 
-X_train, X_test, y_train, y_test, data_train, data_test = train_test_split(X, y, df["DATA"], test_size=0.2, random_state=42)
+# 🔹 Separar dados para treino e teste
+X_train, X_test, y_train, y_test = train_test_split(X[y.notna()], y[y.notna()], test_size=0.3, random_state=42)
 
-model = xgb.XGBRegressor(objective="reg:squarederror", n_estimators=150, learning_rate=0.3, random_state=42)
+#------------------------------------------------------------#
+# 🛠️ Otimização de Hiperparâmetros com Optuna
+
+def objective(trial):
+    """Função objetivo para otimizar os hiperparâmetros do XGBoost."""
+    
+    params = {
+        "objective": "reg:squarederror",
+        "n_estimators": trial.suggest_int("n_estimators", 50, 300),
+        "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3),
+        "max_depth": trial.suggest_int("max_depth", 3, 10),
+        "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+        "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+        "gamma": trial.suggest_float("gamma", 0, 5),
+        "lambda": trial.suggest_float("lambda", 1, 10),
+        "alpha": trial.suggest_float("alpha", 0, 10),
+        "random_state": 42
+    }
+
+    model = xgb.XGBRegressor(**params)
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    mae = mean_absolute_error(y_test, y_pred)
+
+    return mae  # Queremos minimizar o erro
+
+# 🔹 Rodar Optuna para encontrar os melhores parâmetros
+study = optuna.create_study(direction="minimize")
+study.optimize(objective, n_trials=50)
+
+# 📌 Melhor conjunto de hiperparâmetros encontrados
+best_params = study.best_params
+print("✅ Melhores parâmetros encontrados:", best_params)
+
+#------------------------------------------------------------#
+# 🔹 Treinar modelo final com os melhores parâmetros
+model = xgb.XGBRegressor(**best_params)
 model.fit(X_train, y_train)
 
-# fazendo previsões
+# 🔹 Fazer previsões no conjunto de teste
 y_pred = model.predict(X_test)
 
-# avaliando o modelo
-mse = mean_squared_error(y_test, y_pred) 
-r2 = r2_score(y_test, y_pred)
-# na Learning Rate 0.1, os MSE tendem a ser sempre 620-660
-print(f"erro Quadrático Médio (MSE): {mse:.2f}") # erro médio ao quiadrado entre os valores reais e da predição (570-765) (L.R: 0.3)
-print(f"coeficiente de Determinação (R²): {r2:.2f}") # % das variaçoes dos dados explicadas pelo modelo (0.67 - 0.75) (L.R: 0.3)
+# 📊 Cálculo das métricas
+mae = mean_absolute_error(y_test, y_pred)
+mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
 
-# cria o DataFrame para visualização dos resultados
-df_resultados = pd.DataFrame({"DATA": data_test, "Y_real": y_test, "Y_predito": y_pred})
-df_resultados = df_resultados.sort_values(by="DATA")  # ordenar pela data
+# 📢 Exibir resultados
+print(f"🔹 Mean Absolute Error (MAE): {mae:.4f}")
+print(f"🔹 Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
 
-# potar os valores reais vs previstos ao longo do tempo
+# 🔹 Previsão dos valores ausentes de Y
+X_pred = X[y.isna()]
+df.loc[y.isna(), "Y"] = model.predict(X_pred)
+
+df.to_csv("./projecao_final.csv", index=False)
+print("Previsão de Y concluída e salva!")
+
+#------------------------------------------------------------#
+# 📈 Visualização dos dados previstos
+
+df_resultados = df[["DATA", "Y"]]
 plt.figure(figsize=(12, 6))
-plt.plot(df_resultados["DATA"], df_resultados["Y_real"], label="Valores Reais", color="blue", marker="o")
-plt.plot(df_resultados["DATA"], df_resultados["Y_predito"], label="Valores Previstos", color="red", linestyle="dashed", marker="x")
+plt.plot(df_resultados["DATA"], df_resultados["Y"], label="Valores Previstos de Y", color="red", linestyle="dashed", marker="x")
 plt.xlabel("Data")
 plt.ylabel("Y")
-plt.title("Comparação entre Valores Reais e Previstos ao longo do Tempo")
+plt.title("Valores Previstos de Y ao longo do Tempo")
 plt.legend()
 plt.xticks(rotation=45)
 plt.grid(True)
