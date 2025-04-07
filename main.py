@@ -5,6 +5,7 @@ import optuna
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
+from sklearn.model_selection import KFold
 
 #------------------------------------------------------------#
 # 📌 Carregar o dataset
@@ -96,20 +97,29 @@ best_params = study.best_params
 print("✅ Melhores parâmetros encontrados:", best_params)
 
 #------------------------------------------------------------#
-# 🔹 Treinar modelo final com os melhores parâmetros
-model = xgb.XGBRegressor(**best_params)
-model.fit(X_train, y_train)
+# 🔹 Avaliação final com K-Fold
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+maes, mapes = [], []
 
-# 🔹 Fazer previsões no conjunto de teste
-y_pred = model.predict(X_test)
+for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
+    X_tr, X_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+    y_tr, y_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
 
-# 📊 Cálculo das métricas
-mae = mean_absolute_error(y_test, y_pred)
-mape = np.mean(np.abs((y_test - y_pred) / y_test)) * 100
+    model = xgb.XGBRegressor(**best_params)
+    model.fit(X_tr, y_tr)
 
-# 📢 Exibir resultados
-print(f"🔹 Mean Absolute Error (MAE): {mae:.4f}")
-print(f"🔹 Mean Absolute Percentage Error (MAPE): {mape:.2f}%")
+    y_pred = model.predict(X_val)
+    mae = mean_absolute_error(y_val, y_pred)
+    mape = np.mean(np.abs((y_val - y_pred) / y_val)) * 100
+
+    maes.append(mae)
+    mapes.append(mape)
+    print(f"🔹 Fold {fold+1}: MAE={mae:.4f}, MAPE={mape:.2f}%")
+
+# 📢 Exibir médias finais
+print(f"\n✅ Avaliação Final com K-Fold (5 Folds)")
+print(f"🔹 MAE Médio: {np.mean(maes):.4f}")
+print(f"🔹 MAPE Médio: {np.mean(mapes):.2f}%")
 
 # 🔹 Previsão dos valores ausentes de Y
 X_pred = X[y.isna()]
