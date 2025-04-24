@@ -8,18 +8,14 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import KFold
 
 #------------------------------------------------------------#
-# 📌 Carregar o dataset
+# Carregar o dataset
 df = pd.read_csv("./projecao.csv")
 
-# 📌 Criar colunas "Mês" e "Ano"
-df["DATA"] = pd.to_datetime(df["DATA"])
-df["Mes"] = df["DATA"].dt.month
-df["Ano"] = df["DATA"].dt.year
 
-# 📌 Lista das colunas Xn com valores faltantes a serem preenchidos
+# Lista das colunas Xn com valores faltantes a serem preenchidos
 colunas_com_nan = ["X06", "X12", "X16", "X17", "X18", "X19", "X20", "X21", "X22", "X23"]
 
-# 📌 Preencher os Xn usando XGBoost
+# Preencher os Xn usando XGBoost
 for coluna in colunas_com_nan:
     print(f"Treinando modelo para preencher {coluna}...")
 
@@ -39,12 +35,12 @@ for coluna in colunas_com_nan:
 
         df.loc[y.isna(), coluna] = model.predict(X_pred)
 
-# 📌 Salvar dataset com os Xn preenchidos
+# Salvar dataset com os Xn preenchidos
 df.to_csv("./projecao_preenchido_corrigido.csv", index=False)
 print("Preenchimento dos Xn finalizado e salvo!")
 
 #------------------------------------------------------------#
-# 📊 Previsão de Y usando os Xn preenchidos + "Mês" e "Ano"
+# Previsão de Y usando os Xn preenchidos + "Mês" e "Ano"
 
 df = pd.read_csv("./projecao_preenchido_corrigido.csv")
 
@@ -61,7 +57,7 @@ y = df["Y"]
 X_train, X_test, y_train, y_test = train_test_split(X[y.notna()], y[y.notna()], test_size=0.3, random_state=42)
 
 #------------------------------------------------------------#
-# 🛠️ Otimização de Hiperparâmetros com Optuna
+# Otimização de Hiperparâmetros com Optuna
 
 def objective(trial):
     """Função objetivo para otimizar os hiperparâmetros do XGBoost."""
@@ -92,7 +88,7 @@ def objective(trial):
 study = optuna.create_study(direction="minimize")
 study.optimize(objective, n_trials=50)
 
-# 📌 Melhor conjunto de hiperparâmetros encontrados
+# Melhor conjunto de hiperparâmetros encontrados
 best_params = study.best_params
 print("✅ Melhores parâmetros encontrados:", best_params)
 
@@ -116,7 +112,7 @@ for fold, (train_idx, val_idx) in enumerate(kf.split(X_train)):
     mapes.append(mape)
     print(f"🔹 Fold {fold+1}: MAE={mae:.4f}, MAPE={mape:.2f}%")
 
-# 📢 Exibir médias finais
+# Exibir médias finais
 print(f"\n✅ Avaliação Final com K-Fold (5 Folds)")
 print(f"🔹 MAE Médio: {np.mean(maes):.4f}")
 print(f"🔹 MAPE Médio: {np.mean(mapes):.2f}%")
@@ -129,7 +125,7 @@ df.to_csv("./projecao_final.csv", index=False)
 print("Previsão de Y concluída e salva!")
 
 #------------------------------------------------------------#
-# 📈 Visualização dos dados previstos
+# Visualização dos dados previstos
 
 df_resultados = df[["DATA", "Y"]]
 plt.figure(figsize=(12, 6))
