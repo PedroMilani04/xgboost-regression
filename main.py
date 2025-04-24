@@ -8,7 +8,7 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import KFold
 
 #------------------------------------------------------------#
-# Carregar o dataset
+# gitCarregar o dataset
 df = pd.read_csv("./projecao.csv")
 
 
